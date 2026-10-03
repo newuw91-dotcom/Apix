@@ -1,0 +1,21 @@
+name: Cloud Stream Terminal
+
+on:
+  workflow_dispatch: # يسمح لك بتشغيل السيرفر يدوياً متى ما أردت
+
+jobs:
+  run-stream-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Build Docker Image
+        run: docker build -t apix-stream .
+        
+      - name: Run Container
+        env:
+          VPN_URL: ${{ secrets.VPN_URL }}
+          CF_TOKEN: ${{ secrets.CF_TOKEN }}
+        run: |
+          docker run --rm -e VPN_URL="${VPN_URL}" -e CF_TOKEN="${CF_TOKEN}" apix-stream
