@@ -7,7 +7,6 @@ from flask import Flask, request, jsonify, make_response
 app = Flask(__name__)
 SECRET = "APiX2026"
 
-# تفعيل CORS بالكامل لكي تسمح للمتصفح ولوحة التحكم بالاتصال دون حظر
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
@@ -41,6 +40,7 @@ def parse_vless_to_xray(vless_url):
     return {"inbounds": [{"port": 1080, "listen": "127.0.0.1", "protocol": "socks", "settings": {"auth": "noauth", "udp": True}}], "outbounds": [outbound]}
 
 def auto_start_vpn():
+    # 1. تهيئة VLESS إذا كان موجوداً (على البورت 1080)
     vpn_url = os.environ.get("VPN_URL")
     if vpn_url:
         config = parse_vless_to_xray(vpn_url)
@@ -48,7 +48,23 @@ def auto_start_vpn():
             with open("config.json", "w") as f:
                 json.dump(config, f)
             subprocess.run(["tmux", "new-session", "-d", "-s", "xray_vpn", "xray run -c config.json"])
-            print("✅ VPN Started Automatically on port 1080")
+            print("✅ VLESS VPN Ready on Socks5 port 1080")
+
+    # 2. تهيئة Cloudflare WARP إذا كان موجوداً (على البورت 1081)
+    vpn_cloud = os.environ.get("VPN_CLOUD")
+    if vpn_cloud:
+        with open("wg0.conf", "w") as f:
+            f.write(vpn_cloud)
+        
+        wireproxy_conf = """WGConfig = wg0.conf
+[Socks5]
+BindAddress = 127.0.0.1:1081
+"""
+        with open("wireproxy.conf", "w") as f:
+            f.write(wireproxy_conf)
+            
+        subprocess.run(["tmux", "new-session", "-d", "-s", "cloud_vpn", "wireproxy -c wireproxy.conf"])
+        print("✅ Cloudflare VPN Ready on Socks5 port 1081")
 
 @app.route('/')
 def hello():
@@ -56,7 +72,6 @@ def hello():
 
 @app.route('/api/tmux', methods=['POST', 'OPTIONS'])
 def tmux_api():
-    # الرد السريع على طلبات التحقق المسبق للمتصفح
     if request.method == 'OPTIONS':
         return make_response('', 204)
 
@@ -73,9 +88,7 @@ def tmux_api():
     elif action == "start":
         cmd = data.get("cmd", "")
         if not is_running(ch_id):
-            # إنشاء نافذة tmux جديدة
             subprocess.run(["tmux", "new-session", "-d", "-s", ch_id])
-            # إرسال الأمر كنص حرفي لتجنب كسر الرموز والشرطات
             subprocess.run(["tmux", "send-keys", "-t", ch_id, "-l", cmd])
             subprocess.run(["tmux", "send-keys", "-t", ch_id, "Enter"])
             return jsonify({"status": "started", "running": True})
