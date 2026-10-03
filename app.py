@@ -2,10 +2,18 @@ import os
 import json
 import urllib.parse
 import subprocess
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 
 app = Flask(__name__)
 SECRET = "APiX2026"
+
+# تفعيل CORS بالكامل لكي تسمح للمتصفح ولوحة التحكم بالاتصال دون حظر
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
+    return response
 
 def is_running(ch_id):
     res = subprocess.run(["tmux", "has-session", "-t", str(ch_id)], capture_output=True)
@@ -46,10 +54,14 @@ def auto_start_vpn():
 def hello():
     return "APiX Cloud Terminal is Running 🚀"
 
-@app.route('/api/tmux', methods=['POST'])
+@app.route('/api/tmux', methods=['POST', 'OPTIONS'])
 def tmux_api():
-    data = request.json
-    if not data or data.get("secret") != SECRET:
+    # الرد السريع على طلبات التحقق المسبق للمتصفح
+    if request.method == 'OPTIONS':
+        return make_response('', 204)
+
+    data = request.json or {}
+    if data.get("secret") != SECRET:
         return jsonify({"error": "Unauthorized"}), 401
     
     action = data.get("action")
@@ -57,23 +69,29 @@ def tmux_api():
     
     if action == "status":
         return jsonify({"running": is_running(ch_id)})
+
     elif action == "start":
-        cmd = data.get("cmd")
+        cmd = data.get("cmd", "")
         if not is_running(ch_id):
+            # إنشاء نافذة tmux جديدة
             subprocess.run(["tmux", "new-session", "-d", "-s", ch_id])
-            subprocess.run(["tmux", "send-keys", "-t", ch_id, cmd, "C-m"])
-            return jsonify({"status": "started"})
-        return jsonify({"status": "already_running"})
+            # إرسال الأمر كنص حرفي لتجنب كسر الرموز والشرطات
+            subprocess.run(["tmux", "send-keys", "-t", ch_id, "-l", cmd])
+            subprocess.run(["tmux", "send-keys", "-t", ch_id, "Enter"])
+            return jsonify({"status": "started", "running": True})
+        return jsonify({"status": "already_running", "running": True})
+
     elif action == "log":
         if is_running(ch_id):
-            result = subprocess.run(["tmux", "capture-pane", "-t", ch_id, "-p", "-S", "-40"], capture_output=True, text=True)
+            result = subprocess.run(["tmux", "capture-pane", "-t", ch_id, "-p", "-S", "-50"], capture_output=True, text=True)
             return jsonify({"status": "ok", "log": result.stdout})
-        return jsonify({"status": "error", "log": "النافذة مغلقة."})
+        return jsonify({"status": "error", "log": "النافذة مغلقة أو لم تبدأ بعد."})
+
     elif action == "stop":
         if is_running(ch_id):
             subprocess.run(["tmux", "kill-session", "-t", ch_id])
-            return jsonify({"status": "stopped"})
-        return jsonify({"status": "not_running"})
+            return jsonify({"status": "stopped", "running": False})
+        return jsonify({"status": "not_running", "running": False})
 
 if __name__ == '__main__':
     auto_start_vpn()
