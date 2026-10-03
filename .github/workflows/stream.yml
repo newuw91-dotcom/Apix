@@ -1,4 +1,4 @@
-name: Cloud Stream Terminal
+Name: Cloud Stream Terminal
 
 on:
   workflow_dispatch: # يسمح لك بتشغيل السيرفر يدوياً متى ما أردت
@@ -17,5 +17,6 @@ jobs:
         env:
           VPN_URL: ${{ secrets.VPN_URL }}
           CF_TOKEN: ${{ secrets.CF_TOKEN }}
+          VPN_CLOUD: ${{ secrets.VPN_CLOUD }}
         run: |
-          docker run --rm -e VPN_URL="${VPN_URL}" -e CF_TOKEN="${CF_TOKEN}" apix-stream
+          docker run --rm -e VPN_URL="${VPN_URL}" -e CF_TOKEN="${CF_TOKEN}" -e VPN_CLOUD="${VPN_CLOUD}" apix-stream
