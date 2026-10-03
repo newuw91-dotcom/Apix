@@ -9,6 +9,12 @@ RUN wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/c
 # تثبيت Xray-core
 RUN wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip && unzip Xray-linux-64.zip -d /usr/local/bin/ && chmod +x /usr/local/bin/xray
 
+# تثبيت Wireproxy لتحويل إعدادات WireGuard إلى بروكسي SOCKS5
+RUN wget -q https://github.com/octeep/wireproxy/releases/latest/download/wireproxy_linux_amd64.tar.gz && \
+    tar -xzf wireproxy_linux_amd64.tar.gz && \
+    mv wireproxy /usr/local/bin/ && \
+    chmod +x /usr/local/bin/wireproxy
+
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
